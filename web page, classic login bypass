@@ -1,0 +1,80 @@
+from flask import Flask, request, render_template_string
+import sqlite3
+
+app = Flask(__name__)
+
+# --- Database Setup ---
+conn = sqlite3.connect('users.db', check_same_thread=False)
+cursor = conn.cursor()
+cursor.execute("DROP TABLE IF EXISTS users")
+cursor.execute("""
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    password TEXT NOT NULL
+)
+""")
+cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", ("manshi", "manshi13"))
+cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", ("user", "user123"))
+conn.commit()
+
+# --- HTML Template with styling ---
+HTML = '''
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login Demo - SQL Injection</title>
+    <style>
+        body { font-family: Arial; background: #f9f9f9; text-align: center; padding: 50px; }
+        .container { background: white; padding: 40px; border-radius: 10px; width: 300px; margin: auto; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        input[type=text], input[type=password] {
+            width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px;
+        }
+        button {
+            background-color: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover { background-color: #218838; }
+        .log { margin-top: 20px; font-family: monospace; text-align: left; white-space: pre-wrap; color: #555; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>🔐 Login Page</h2>
+        <form method="post">
+            <input type="text" name="username" placeholder="Username" required><br>
+            <input type="password" name="password" placeholder="Password" required><br>
+            <button type="submit">Login</button>
+        </form>
+        {% if result %}<p><strong>{{ result }}</strong></p>{% endif %}
+        {% if log %}<div class="log"><strong>Executed SQL:</strong>\n{{ log }}</div>{% endif %}
+    </div>
+</body>
+</html>
+'''
+
+# --- Routes ---
+@app.route('/', methods=['GET', 'POST'])
+def login():
+    result = ""
+    log = ""
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+
+        # Vulnerable Query
+        query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
+        log = query
+        cursor.execute(query)
+        user = cursor.fetchone()
+
+        if user:
+            result = f"✅ Welcome, {user[1]}! You are logged in."
+        else:
+            result = "❌ Login Failed. User not found."
+
+    return render_template_string(HTML, result=result, log=log)
+
+# --- Run Server ---
+if __name__ == '__main__':
+    app.run(debug=True)
